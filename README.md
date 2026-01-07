@@ -18,4 +18,3 @@ gcc -Os -s -ffunction-sections -fdata-sections -Wl,--gc-sections new.c LibOpt.c 
 * **Автор:** Поздняков Алексей Васильевич
 * **Email:** [avp70ru@mail.ru](mailto:avp70ru@mail.ru)
 * **GitHub:** [@AVPscan](github.com)
-
