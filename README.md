@@ -13,4 +13,3 @@
 Для сборки программы в Linux (NixOS) используйте команду:
 ```bash
 gcc -Os -s -ffunction-sections -fdata-sections -Wl,--gc-sections new.c LibOpt.c -o inventory_prog
-
