@@ -247,6 +247,28 @@ static int HexVal(char c) {
 static void ValToHex(unsigned char b, char *out) {
     const char *h = "0123456789ABCDEF";
     out[0] = h[b >> 4]; out[1] = h[b & 0x0F]; }
+char* GenerateRN(const char *fname) {
+    time_t t = time(NULL);
+    struct tm *tm = localtime(&t);
+    char *out = GetBuf();
+    int d = (tm->tm_wday == 0) ? 7 : tm->tm_wday;
+    int iso_wday = (tm->tm_wday == 0) ? 6 : tm->tm_wday - 1;
+    int day_offset = tm->tm_yday - iso_wday;
+    int week = (day_offset + 7 + 6) / 7; 
+    if (day_offset < 0) week = 1;
+    for (int r = 1; r <= 10; r++) {
+        int cur_r = (r > 9) ? 1 : r;
+        const char *p_in = fname;
+        char *p_out = out;
+        while (*p_in && *p_in != '.') *p_out++ = *p_in++;
+        *p_out++ = (char)(cur_r + '0');
+        *p_out++ = (char)(d + '0');
+        *p_out++ = (char)((week / 10) + '0');
+        *p_out++ = (char)((week % 10) + '0');
+        while (*p_in) *p_out++ = *p_in++;
+        *p_out = '\0';
+        if (r == 10 || access(out, 0) == -1) break; }
+    return out; }
 static void Crypt(unsigned char *buf, int len) {
     unsigned char salt[] = {0xAC, 0x77, 0x5F, 0x12, 0x88, 0x33, 0x22, 0x11};
     for (int i = 0; i < len; i++) {
@@ -354,7 +376,7 @@ int TxtToHtml(const char *src, const char *dst, const char *cfg) {
             if (c == '\n') { if (line_pos == 0) write(fo, "&nbsp;", 6); write(fo, "<br>\n", 5); line_pos = 0; continue; }
             if (c == '\r') continue;
             if (line_pos <= 2) write(fo, "<span style='color:#888888;'>", 29);
-            else if (line_pos <= 5) write(fo, "<span style='color:#0055ff;'>", 29);
+            else if (line_pos <= 6) write(fo, "<span style='color:#0055ff;'>", 29);
             else if (c >= '0' && c <= '9') write(fo, "<span style='color:#008080;'>", 29);
             else write(fo, "<span style='color:#800000;'>", 29);
             if (c == ' ') write(fo, "&nbsp;", 6);

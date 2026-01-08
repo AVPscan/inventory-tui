@@ -57,11 +57,11 @@ void addDic(int price, int col, const char *name) {
         int mid = low + (high - low) / 2;
         int cmp = StrCmp(dict[mid].name, name);       
         if (cmp == 0) {
-            dict[mid].price = (price < 0) ? -price : price;
-            int total = dict[mid].col + ((col >= 0) ? col % 10 : 0);
-            dict[mid].col = (total > 9) ? 9 : total;
-            int p_len = GNL(dict[mid].price);
-            if (p_len > max_n_chars) max_n_chars = p_len;
+            if (price != 0) dict[mid].price=(price<0)?-price:price;
+            int total = dict[mid].col+((col>=0)?col:0);
+            dict[mid].col=(total>99)?99:total;
+            int p_len=GNL(dict[mid].price);
+            if (p_len>max_n_chars) max_n_chars=p_len;
             return; }
         if (cmp < 0) low = mid + 1;
         else high = mid - 1; }
@@ -73,10 +73,10 @@ void addDic(int price, int col, const char *name) {
         dict = new_d;
         dict_cap = new_cap; }
     if (pos < dict_count) MemMove(&dict[pos + 1], &dict[pos], (dict_count - pos) * sizeof(Product));
-    dict[pos].name = StrDup(name);
-    dict[pos].price = (price < 0) ? -price : price;
-    dict[pos].col = (col >= 0) ? col % 10 : 0;
-    dict[pos].len = StrLen(name); 
+    dict[pos].name=StrDup(name);
+    dict[pos].price=(price<0)?-price:price; col=(col>=0)?col:0;
+    dict[pos].col=(col>99)?99:col;
+    dict[pos].len=StrLen(name); 
     if (dict[pos].len > max_s_chars) max_s_chars = dict[pos].len;
     int p_len = GNL(dict[pos].price);
     if (p_len > max_n_chars) max_n_chars = p_len;
@@ -186,13 +186,13 @@ int LoadDic(const char *path) {
     if (has_p && has_n) { name_tmp[n_ptr] = '\0'; addDic((int)price, 0, UCase(name_tmp, 0)); }
     close(fd); enc_mode = 0; return dict_count; }
 char* GetRow(int num, int price, int col, const char *name, int mode) {
-    static char buffers[8][512];
+    static char buffers[8][256];
     static int b_idx = 0; b_idx = (b_idx + 1) & 7;
     char *d = buffers[b_idx]; int c; int b = StringBC(name, &c);
     int name_w = max_s_chars + (b - c); char col_out[16];
-    if (mode==3 && col < 1) { StrCpy(d, ""); return d; }
-    if ((mode == 2 || mode == 3) && col < 2) StrCpy(col_out, "   ");
-    else sprintf(col_out, "%2d ", col);
+    if (mode == 3 && col < 1) { StrCpy(d, ""); return d; }
+    if ((mode == 2 || mode == 3) && col < 2) StrCpy(col_out, "    ");
+    else sprintf(col_out, " %2d ", col); 
     switch (mode) {
         case 1:
         case 2: sprintf(d, "%s%02d %s%s %s%*d %s%-*s%s", 
@@ -350,13 +350,14 @@ int main(int argc, char *argv[]) {
         pos=EditField(nname,&nprice,&ncol,++num);
         if (nprice==0) break;
         if (pos==-1) addDic(nprice,ncol,nname);
-        else { dict[pos].col=ncol; dict[pos].price=nprice; } }
-    num=0; for (int i = 0; i < dict_count; i++) { if (dict[i].col > 0) num+=dict[i].price*dict[i].col; }
-    if (num) { printf("      %s%*d%s",CBRed,max_n_chars+1,num,crst); fflush(stdout); }
-    pos=ExportDict(DB_NAME);
-    pos=ExportDict(fileres);
-    if (smail) { pos=TxtToHtml(fileres, filesendhtml, filesendID); pos=SendMailSecure(filesendID,filesendhtml);
-                    unlink(filesendhtml); if (pos) printf("\n%sОшибка отправки письма: %d\n", ccol, pos); }
+        else { dict[pos].col=(ncol==0)?0:((dict[pos].col+ncol>99)?99:dict[pos].col+ncol);
+               dict[pos].price=nprice; } }
+    pos=ExportDict(DB_NAME); num=0;
+    for (int i = 0; i < dict_count; i++) { if (dict[i].col > 0) num+=dict[i].price*dict[i].col; }
+    if (num) { printf("      %s%*d%s",CBRed,max_n_chars+1,num,crst); fflush(stdout);
+               pos=ExportDict(fileres);
+               if (smail) { pos=TxtToHtml(fileres, filesendhtml, filesendID); pos=SendMailSecure(filesendID,filesendhtml);
+                            unlink(filesendhtml); if (pos) printf("\n%sОшибка отправки письма: %d\n", ccol, pos); } }
     SetInputMode(0);
     printf("%s",ShowCursor);
     ClearDic(); return 0; }

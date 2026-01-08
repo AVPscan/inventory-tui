@@ -79,6 +79,7 @@ extern void SWD();
 extern const char* DateStr();
 extern int IsXDigit(int c);
 extern int ToLower(int c);
+extern char* GenerateRN(const char *fname);
 extern int AutoEncryptOrValidate(const char *fname);
 extern int SendMailSecure(const char *fname, const char *target);
 extern int enc_mode;
