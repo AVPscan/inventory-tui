@@ -13,23 +13,23 @@
 #ifndef LIBOPT_H
 #define LIBOPT_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdio.h>
-#include <stddef.h>
-#include <sys/types.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include <termios.h>
-
-extern int enc_mode; 
-
-#define HideCursor    "\033[?25l"
-#define ShowCursor    "\033[?25h"
-#define ClearScreen   "\033[2J\033[H"
-#define SaveCursor    "\033[s"
-#define LoadCursor    "\033[u"
-#define ClearCurEnd   "\033[K"
-#define CBlack   "\033[30m"
+#include <time.h>
+#define HideCursor  "\033[?25l"
+#define ShowCursor  "\033[?25h"
+#define ClearScreen "\033[2J\033[H"
+#define SaveCursor  "\033[s"
+#define LoadCursor  "\033[u"
+#define ClearCurEnd "\033[K"
+#define CBlack   "\033[30m"     // Обычный (внимание: на черном фоне не виден!)
 #define CRed     "\033[31m"
 #define CGreen   "\033[32m"
 #define CYellow  "\033[33m"
@@ -38,57 +38,57 @@ extern int enc_mode;
 #define CCyan    "\033[36m"
 #define CWhite   "\033[37m"
 #define CReset   "\033[0m"
-#define CBBlack   "\033[1;30m"
-#define CBRed     "\033[1;31m"
-#define CBGreen   "\033[1;32m"
-#define CBYellow  "\033[1;33m"
-#define CBBlue    "\033[1;34m"
-#define CBMagenta "\033[1;35m"
-#define CBCyan    "\033[1;36m"
-#define CBWhite   "\033[1;37m"
+#define CBBlack   "\033[1;30m"  // Темно-серый
+#define CBRed     "\033[1;31m"  // Ярко-красный
+#define CBGreen   "\033[1;32m"  // Ярко-зеленый
+#define CBYellow  "\033[1;33m"  // Ярко-желтый
+#define CBBlue    "\033[1;34m"  // Ярко-синий
+#define CBMagenta "\033[1;35m"  // Ярко-пурпурный
+#define CBCyan    "\033[1;36m"  // Ярко-голубой
+#define CBWhite   "\033[1;37m"  // Чисто белый (жирный)
+#define IO_SIZE 4096
 
-int   MemCmp(const void *s1, const void *s2, size_t n);
-void  MemCpy(void *d, const void *s, int n);
-void* MemSet(void *s, int c, int n);
-void* MemMove(void *dest, const void *src, size_t n);
+extern int MemCmp(const void *s1, const void *s2, size_t n);
+extern void MemCpy(void *d, const void *s, int n);
+extern void *MemSet(void *s, int c, int n);
+extern void *MemMove(void *dest, const void *src, size_t n);
+extern size_t StrLenB(const char *s);
+extern char *StrCpy(char *dest, const char *src);
+extern char* StrCat(char *dest, const char *src);
+extern char* StrNCat(char *dest, const char *src, int n);
+extern int StrCmp(const char *s1, const char *s2);
+extern int StrNCmp(const char *s1, const char *s2, int n);
+extern char *StrChr(const char *s, int c);
+extern int StrLen(const char *s);
+extern int StringBC(const char *s, int *c);
+extern char* GetBuf();
+extern char *StrDup(const char *s);
+extern char* Replays(const char *input, const char *find, const char *repl);
+extern const char* SetColor(int c);
+extern const char* CursorXY(int x, int y);
+extern const char* CursorUp(int y);
+extern const char* CursorPos(int x);
+extern const char* CursorPosUp(int x, int y);
+extern const char* SetMode(int i);
+extern const char* SetColMod(int c, int m);
+extern void GetCursorXY(int *x, int *y);
+extern int IsXDigit(int c);
+extern int ToLower(int c);
+extern void SetInputMode(int raw);
+typedef struct { const char *seq; const char *name; } KeyMap;
+extern const char* GetKeyName();
+extern void SWD();
+extern const char* DateStr();
+extern int IsEncrypted(const char *fname);
+extern int SaveEncrypted(const char *fname, const char *email, const char *pass);
+extern int DecodeToEmailAndPass(const char *fname, char *email, char *pass);
+extern int AutoEncryptOrValidate(const char *fname);
+extern int SendMailSecure(const char *fname, const char *target_html);
+extern int enc_mode;
+extern void AnalyzeFormat(unsigned char *buf, ssize_t size);
+extern int TxtToHtml(const char *src, const char *dst, const char *cfg);
 
-size_t StrLenB(const char *s);
-int    StrLen(const char *s);
-char*  StrCpy(char *dest, const char *src);
-char*  StrCat(char *dest, const char *src);
-char*  StrNCat(char *dest, const char *src, int n);
-int    StrCmp(const char *s1, const char *s2);
-int    StrNCmp(const char *s1, const char *s2, int n);
-char*  StrChr(const char *s, int c);
-char*  StrDup(const char *s);
-char*  Replays(const char *input, const char *find, const char *repl);
-char*  GetBuf();
-int    StringBC(const char *s, int *c);
-
-const char* SetColor(int c);
-const char* CursorXY(int x, int y);
-const char* CursorUp(int y);
-const char* CursorPos(int x);
-const char* CursorPosUp(int x, int y);
-const char* SetMode(int i);
-const char* SetColMod(int c, int m);
-void        GetCursorXY(int *x, int *y);
-
-void        SetInputMode(int raw);
-const char* GetKeyName();
-
-int  IsXDigit(int c);
-int  ToLower(int c);
-
-void        SWD();
-const char* DateStr();
-int         IsEncrypted(const char *fname);
-int         SaveEncrypted(const char *fname, const char *email, const char *pass);
-int         DecodeToEmailAndPass(const char *fname, char *email, char *pass);
-int         AutoEncryptOrValidate(const char *fname);
-int         SendMailSecure(const char *fname, const char *target_html);
-int         TxtToHtml(const char *src, const char *dst, const char *cfg);
-void        AnalyzeFormat(unsigned char *buf, ssize_t size);
-
+#ifdef __cplusplus
+}
 #endif
-
+#endif // LIBOPT_H

@@ -338,8 +338,8 @@ int main(int argc, char *argv[]) {
     char nname[128] = {0};
     int num,pos,ncol,nprice,nomail;
     SWD();
-    int sendmail=1;
-    if (AutoEncryptOrValidate(filesendID)) sendmail=0;
+    int smail=1;
+    if (AutoEncryptOrValidate(filesendID)) smail=0;
     SetInputMode(1);
     printf("%s",HideCursor);
     num=LoadDic(DB_NAME);
@@ -360,7 +360,7 @@ int main(int argc, char *argv[]) {
     if (num) { printf("      %s%*d%s",CBRed,max_n_chars+1,num,crst); fflush(stdout); }
     pos=ExportDict(DB_NAME);
     pos=ExportDict(fileres);
-    if (sendmail) { pos=TxtToHtml(fileres, filesendhtml, filesendID); pos=SendMailSecure(filesendID,filesendhtml);
+    if (smail) { pos=TxtToHtml(fileres, filesendhtml, filesendID); pos=SendMailSecure(filesendID,filesendhtml);
                     unlink(filesendhtml); if (pos) printf("\n%sОшибка отправки письма: %d\n", ccol, pos); }
     SetInputMode(0);
     printf("%s",ShowCursor);
