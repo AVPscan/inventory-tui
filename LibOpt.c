@@ -17,8 +17,9 @@
 #include <termios.h>
 #include <time.h>
 
-/* --- РАБОТА С ПАМЯТЬЮ --- */
-// Оптимизированное сравнение (по 8 байт)
+#define IO_SIZE 4096
+static unsigned char io_buf[IO_SIZE];
+
 int MemCmp(const void *s1, const void *s2, size_t n) {
     if (n == 0) return 256;
     const unsigned char *p1 = (const unsigned char *)s1; 
@@ -47,7 +48,7 @@ void *MemMove(void *dest, const void *src, size_t n) {
     else {
         for (size_t i = 0; i < n; i++) d[i] = s[i]; }
     return dest; }
-/* --- РАБОТА СО СТРОКАМИ (БАЙТЫ) --- */
+
 size_t StrLenB(const char *s) { 
     if (!s) return 0;
     size_t l = 0; while (s[l]) l++; 
@@ -74,7 +75,6 @@ int StrNCmp(const char *s1, const char *s2, int n) {
 char *StrChr(const char *s, int c) {
     while (*s) { if (*s == (char)c) return (char *)s; s++; } 
     return (c == 0) ? (char *)s : NULL; }
-/* --- РАБОТА С UTF-8 (СИМВОЛЫ) --- */
 int StrLen(const char *s) {
     if (!s) return 0; 
     const unsigned char *p = (const unsigned char *)s;
@@ -120,6 +120,7 @@ char* Replays(const char *input, const char *find, const char *repl) {
             if (d_ptr < 2047) dest[d_ptr++] = input[i++];
             else break; } }
     dest[d_ptr] = '\0'; return dest; }
+
 const char* SetColor(int c) {
     char *b = GetBuf(); snprintf(b, 32, "\033[%dm", (c < 0) ? -c : c); return b; }
 const char* CursorXY(int x, int y) {
@@ -164,17 +165,6 @@ void GetCursorXY(int *x, int *y) {
 #define CBMagenta "\033[1;35m"  // Ярко-пурпурный
 #define CBCyan    "\033[1;36m"  // Ярко-голубой
 #define CBWhite   "\033[1;37m"  // Чисто белый (жирный)
-int IsXDigit(int c) {
-    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); }
-int ToLower(int c) {
-    return (c >= 'A' && c <= 'Z') ? (c + 32) : c; }
-static int HexVal(char c) {
-    if (c >= '0' && c <= '9') return c - '0';
-    return (ToLower(c) - 'a' + 10); }
-static void ValToHex(unsigned char b, char *out) {
-    const char *h = "0123456789ABCDEF";
-    out[0] = h[b >> 4]; 
-    out[1] = h[b & 0x0F]; }
 
 void SetInputMode(int raw) {
     static struct termios oldt;
@@ -227,12 +217,14 @@ const char* GetKeyName() {
                 out_buf[4] = '+'; out_buf[5] = c + 64; out_buf[6] = '\0'; } 
             else { out_buf[0] = c; out_buf[1] = '\0'; }
     return out_buf; } }
+
 void SWD() {
     char path[4096];
     ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
     if (len <= 0) return;
     path[len] = '\0'; for (char *p = path + len; p > path; p--) if (*p == '/') { *p = '\0'; break; }
     chdir(path); }
+
 const char* DateStr() {
     char *buf = GetBuf();
     if (!buf) return "";
@@ -244,10 +236,19 @@ const char* DateStr() {
     int w_idx = (tm->tm_mday - 1) / 7;
     snprintf(buf, 128, "%s %s недели %s", days[tm->tm_wday], weeks[w_idx], months[tm->tm_mon]);
     return buf; }
-    
-/* --- ОСНОВНАЯ ЛОГИКА ШИФРОВАНИЯ С ОЧИСТКОЙ ПАМЯТИ --- */
+
+int IsXDigit(int c) {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); }
+int ToLower(int c) {
+    return (c >= 'A' && c <= 'Z') ? (c + 32) : c; }
+static int HexVal(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    return ((c >= 'A' && c <= 'Z' ? c + 32 : c) - 'a' + 10); }
+static void ValToHex(unsigned char b, char *out) {
+    const char *h = "0123456789ABCDEF";
+    out[0] = h[b >> 4]; out[1] = h[b & 0x0F]; }
 static void Crypt(unsigned char *buf, int len) {
-    unsigned char salt[] = {0xAC, 0x77, 0x5F, 0x12, 0x88, 0x33, 0x22, 0x11}; 
+    unsigned char salt[] = {0xAC, 0x77, 0x5F, 0x12, 0x88, 0x33, 0x22, 0x11};
     for (int i = 0; i < len; i++) {
         int idx = len - 1 - i;
         unsigned char key = (unsigned char)((idx ^ salt[idx % 8]) + (idx % 11));
@@ -255,128 +256,69 @@ static void Crypt(unsigned char *buf, int len) {
         key ^= salt[(idx + 3) & 7];
         buf[i] ^= key; } }
 static off_t SkipBOM(int fd) {
-    unsigned char b[3];
-    lseek(fd, 0, SEEK_SET);
+    unsigned char b[3]; lseek(fd, 0, SEEK_SET);
     if (read(fd, b, 3) == 3 && b[0] == 0xEF && b[1] == 0xBB && b[2] == 0xBF) return 3;
     return lseek(fd, 0, SEEK_SET); }
-int IsEncrypted(const char *fname) {
-    int fd = open(fname, O_RDONLY);
-    if (fd < 0) return 0;
-    SkipBOM(fd);
-    char h[4];
-    if (read(fd, h, 4) < 4) { close(fd); return 0; }
-    for (int i = 0; i < 4; i++) { if (!IsXDigit(h[i])) { close(fd); return 0; } }
-    int le = (HexVal(h[0]) << 4) | HexVal(h[1]);
-    int lp = (HexVal(h[2]) << 4) | HexVal(h[3]);
-    close(fd);
-    return (le >= 5 && le <= 64 && lp >= 8 && lp <= 64); }
-int SaveEncrypted(const char *fname, const char *email, const char *pass) {
-    int le = (int)StrLenB(email), lp = (int)StrLenB(pass);
-    char header[262]; 
-    unsigned char raw[130]; 
-    MemSet(header, 0, sizeof(header));
-    MemSet(raw, 0, sizeof(raw));
-    ValToHex((unsigned char)le, &header[0]);
-    ValToHex((unsigned char)lp, &header[2]);
-    MemCpy(raw, email, le);
-    MemCpy(raw + le, pass, lp);
-    Crypt(raw, le + lp);
-    for (int i = 0; i < (le + lp); i++) ValToHex(raw[i], &header[4 + i * 2]);
-    int total_len = 4 + (le + lp) * 2;
-    header[total_len++] = '\n';
-    int fd = open(fname, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-    if (fd >= 0) {
-        write(fd, "\xEF\xBB\xBF", 3);
-        write(fd, header, total_len);
-        close(fd); }
-    // ОЧИСТКА: затираем сырые данные и зашифрованный заголовок
-    MemSet(raw, 0, sizeof(raw));
-    MemSet(header, 0, sizeof(header));
-    return (fd < 0) ? -1 : 0; }
-int DecodeToEmailAndPass(const char *fname, char *email, char *pass) {
-    int fd = open(fname, O_RDONLY);
-    if (fd < 0) return 1;
-    SkipBOM(fd);
-    char h[4];
-    if (read(fd, h, 4) < 4) { close(fd); return 1; }
-    int le = (HexVal(h[0]) << 4) | HexVal(h[1]);
-    int lp = (HexVal(h[2]) << 4) | HexVal(h[3]);
-    char hex[260];
-    if (read(fd, hex, (le + lp) * 2) < (le + lp) * 2) { 
-        MemSet(hex, 0, sizeof(hex));
-        close(fd); return 1; }
-    close(fd);
-    unsigned char raw[130];
-    MemSet(raw, 0, sizeof(raw));
-    for (int i = 0; i < (le + lp); i++) {
-        raw[i] = (unsigned char)((HexVal(hex[i * 2]) << 4) | HexVal(hex[i * 2 + 1])); }
-    Crypt(raw, le + lp);
-    MemCpy(email, raw, le); email[le] = 0;
-    MemCpy(pass, raw + le, lp); pass[lp] = 0;
-    // ОЧИСТКА: затираем временные буферы
-    MemSet(raw, 0, sizeof(raw));
-    MemSet(hex, 0, sizeof(hex));
-    return 0; }
 int AutoEncryptOrValidate(const char *fname) {
-    if (IsEncrypted(fname)) return 0;
+    int fd = open(fname, O_RDWR);
+    if (fd < 0) return 1;
+    off_t d_start = SkipBOM(fd);
+    char h[4];
+    if (read(fd, h, 4) == 4) {
+        int is_hex = 1;
+        for (int i = 0; i < 4; i++) {
+            if (!((h[i] >= '0' && h[i] <= '9') || (h[i] >= 'a' && h[i] <= 'f') || (h[i] >= 'A' && h[i] <= 'F'))) is_hex = 0; }
+        if (is_hex) { close(fd); return 0; } }
+    lseek(fd, d_start, SEEK_SET);
+    MemSet(io_buf, 0, IO_SIZE);
+    int r = (int)read(fd, io_buf + 300, IO_SIZE - 301);
+    if (r <= 5) { close(fd); return 1; }
+    char *start = (char*)io_buf + 300;
+    char *at = StrChr(start, '@'), *sp = StrChr(start, ' ');
+    if (at && sp && sp > at) {
+        int le = (int)(sp - start);
+        char *p_st = sp + 1; 
+        while (*p_st == ' ') p_st++;
+        char *p_en = p_st; 
+        while (*p_en && (unsigned char)*p_en > 32) p_en++;
+        int lp = (int)(p_en - p_st);
+        if (le >= 5 && le <= 64 && lp >= 8 && lp <= 64) {
+            unsigned char raw[130]; 
+            char hdr[265]; 
+            MemSet(hdr, 0, 265); MemCpy(raw, start, le); MemCpy(raw + le, p_st, lp);
+            Crypt(raw, le + lp);
+            ValToHex((unsigned char)le, &hdr[0]); ValToHex((unsigned char)lp, &hdr[2]);
+            for (int i = 0; i < (le + lp); i++) ValToHex(raw[i], &hdr[4 + i * 2]);
+            int h_len = 4 + (le + lp) * 2;
+            char *tail_ptr = p_en;
+            if (*tail_ptr == ' ') tail_ptr++; 
+            int tail_len = r - (int)(tail_ptr - start);
+            MemCpy(io_buf, "\xEF\xBB\xBF", 3); MemCpy(io_buf + 3, hdr, h_len);
+            if (tail_len > 0) MemMove(io_buf + 3 + h_len, tail_ptr, tail_len);
+            lseek(fd, 0, SEEK_SET); ftruncate(fd, 0);
+            write(fd, io_buf, 3 + h_len + tail_len); MemSet(raw, 0, 130); 
+            close(fd); return 0; } }
+    close(fd); return 2; }
+int SendMailSecure(const char *fname, const char *target) {
     int fd = open(fname, O_RDONLY);
     if (fd < 0) return 1;
-    char buf[1024]; 
-    MemSet(buf, 0, sizeof(buf));
-    int r = (int)read(fd, buf, sizeof(buf) - 1);
-    close(fd);
-    if (r <= 0) return 1;
-    buf[r] = '\0';
-    char *at = StrChr(buf, '@');
-    if (!at) { MemSet(buf, 0, sizeof(buf)); return 2; }
-    char *e_start = at;
-    while (e_start > buf && (unsigned char)*(e_start - 1) > 32) e_start--;
-    char *e_end = at;
-    while (*e_end && (unsigned char)*e_end > 32) e_end++;
-    char *p_start = e_end;
-    while (*p_start && (unsigned char)*p_start <= 32) p_start++;
-    char *p_end = p_start;
-    while (*p_end && (unsigned char)*p_end > 32) p_end++;
-    int le = (int)(e_end - e_start), lp = (int)(p_end - p_start);
-    if (le < 5 || lp < 8 || le > 64 || lp > 64) {
-        MemSet(buf, 0, sizeof(buf));
-        return 3; }
-    char em[65], pw[65];
-    MemSet(em, 0, sizeof(em));
-    MemSet(pw, 0, sizeof(pw));
-    MemCpy(em, e_start, le); em[le] = 0;
-    MemCpy(pw, p_start, lp); pw[lp] = 0;
-    // ОЧИСТКА основного буфера файла перед шифрованием
-    MemSet(buf, 0, sizeof(buf));
-    int res = SaveEncrypted(fname, em, pw);
-    // ОЧИСТКА временных данных
-    MemSet(pw, 0, sizeof(pw));
-    MemSet(em, 0, sizeof(em));
-    return res; }
-int SendMailSecure(const char *fname, const char *target_html) {
-    char email[65], pass[65], server[128], cmd[1024];
-    MemSet(email, 0, sizeof(email));
-    MemSet(pass, 0, sizeof(pass));
-    if (DecodeToEmailAndPass(fname, email, pass) != 0) return 1;
-    char *domain = StrChr(email, '@');
-    if (!domain) {
-        MemSet(pass, 0, sizeof(pass));
-        return 1; }
-    MemSet(server, 0, sizeof(server));
-    MemCpy(server, "smtp.", 5);
-    StrCpy(server + 5, domain + 1);
-    MemSet(cmd, 0, sizeof(cmd));
-    snprintf(cmd, sizeof(cmd), 
-        "curl -s --url 'smtps://%s:465' --user '%s:%s' "
-        "--mail-from '%s' --mail-rcpt '%s' --upload-file '%s'",
-        server, email, pass, email, email, target_html);
+    SkipBOM(fd);
+    char h[4], hex[260], em[65], pw[65], srv[128], cmd[1200];
+    read(fd, h, 4);
+    int le = (HexVal(h[0]) << 4) | HexVal(h[1]), lp = (HexVal(h[2]) << 4) | HexVal(h[3]);
+    read(fd, hex, (le + lp) * 2); close(fd);
+    unsigned char raw[130];
+    for (int i = 0; i < (le + lp); i++) raw[i] = (unsigned char)((HexVal(hex[i*2]) << 4) | HexVal(hex[i*2+1]));
+    Crypt(raw, le + lp);
+    MemCpy(em, raw, le); em[le] = 0; MemCpy(pw, raw + le, lp); pw[lp] = 0;
+    char *dom = StrChr(em, '@');
+    if (!dom) return 1;
+    MemSet(srv, 0, 128); MemCpy(srv, "smtp.", 5); StrCpy(srv + 5, dom + 1);
+    snprintf(cmd, 1200, "curl -s --url 'smtps://%s:465' --user '%s:%s' --mail-from '%s' --mail-rcpt '%s' --upload-file '%s'", 
+             srv, em, pw, em, em, target);
     int res = system(cmd);
-    // ОЧИСТКА: затираем команду (содержащую пароль) и сам пароль
-    MemSet(cmd, 0, sizeof(cmd));
-    MemSet(pass, 0, sizeof(pass));
+    MemSet(pw, 0, 65); MemSet(cmd, 0, 1200); MemSet(raw, 0, 130);
     return (res == 0) ? 0 : (res >> 8); }
-#define IO_SIZE 4096
-static unsigned char io_buf[IO_SIZE];
 int enc_mode = 0;
 void AnalyzeFormat(unsigned char *buf, ssize_t size) {
     int u8 = 0, cp = 0, ko = 0;
@@ -391,18 +333,28 @@ int TxtToHtml(const char *src, const char *dst, const char *cfg) {
     ssize_t n = read(fi, io_buf, IO_SIZE);
     if (n > 0) { AnalyzeFormat(io_buf, n); lseek(fi, 0, SEEK_SET); } else enc_mode = 0;
     char lg[65], pw[65]; MemSet(lg, 0, 65); MemSet(pw, 0, 65);
-    if (DecodeToEmailAndPass(cfg, lg, pw) != 0) StrCpy(lg, "StoreReport");
+    int fdc = open(cfg, O_RDONLY);
+    if (fdc >= 0) {
+        SkipBOM(fdc); char h[4], hex[260];
+        if (read(fdc, h, 4) == 4) {
+            int le = (HexVal(h[0]) << 4) | HexVal(h[1]), lp = (HexVal(h[2]) << 4) | HexVal(h[3]);
+            if (le >= 5 && read(fdc, hex, (le + lp) * 2) > 0) {
+                unsigned char raw[130];
+                for (int i = 0; i < (le + lp); i++) raw[i] = (unsigned char)((HexVal(hex[i*2]) << 4) | HexVal(hex[i*2+1]));
+                Crypt(raw, le + lp); MemCpy(lg, raw, le); lg[le] = 0; MemSet(raw, 0, 130); } }
+        close(fdc); }
+    if (lg[0] == 0) StrCpy(lg, "StoreReport");
     const char *ds = DateStr();
     dprintf(fo, "From: %s\r\nTo: %s\r\nSubject: Report %s\r\nContent-Type: text/html; charset=utf-8\r\n\r\n", lg, lg, ds);
     dprintf(fo, "<html><head><meta charset='utf-8'></head><body style='background:#f4f4f4; padding:10px;'><div style='background:#fff; border:1px solid #ccc; padding:15px; font-family:monospace; white-space:nowrap; font-size:13px; line-height:1.2;'><div style='color:#00afff; font-weight:bold; margin-bottom:10px;'>User: %s | Date: %s</div><hr style='border:0; border-top:1px solid #eee; margin-bottom:10px;'>", lg, ds);
-    int cp = 0;
+    int line_pos = 0;
     while ((n = read(fi, io_buf, IO_SIZE)) > 0) {
         for (int i = 0; i < n; i++) {
             unsigned char c = io_buf[i];
-            if (c == '\n') { if (cp == 0) write(fo, "&nbsp;", 6); write(fo, "<br>\n", 5); cp = 0; continue; }
+            if (c == '\n') { if (line_pos == 0) write(fo, "&nbsp;", 6); write(fo, "<br>\n", 5); line_pos = 0; continue; }
             if (c == '\r') continue;
-            if (cp <= 2) write(fo, "<span style='color:#888888;'>", 29);
-            else if (cp <= 5) write(fo, "<span style='color:#0055ff;'>", 29);
+            if (line_pos <= 2) write(fo, "<span style='color:#888888;'>", 29);
+            else if (line_pos <= 5) write(fo, "<span style='color:#0055ff;'>", 29);
             else if (c >= '0' && c <= '9') write(fo, "<span style='color:#008080;'>", 29);
             else write(fo, "<span style='color:#800000;'>", 29);
             if (c == ' ') write(fo, "&nbsp;", 6);
@@ -410,13 +362,18 @@ int TxtToHtml(const char *src, const char *dst, const char *cfg) {
             else if (c == '>') write(fo, "&gt;", 4);
             else if (c == '&') write(fo, "&amp;", 5);
             else {
-                if (c < 0x80 || enc_mode == 0) { write(fo, &c, 1);
-                    if (enc_mode == 0 && (c & 0xE0) == 0xC0 && i + 1 < n) write(fo, &io_buf[++i], 1); }
-                else { unsigned char out[2];
-                    if (c >= 192) { out[0] = (c < 240) ? 0xD0 : 0xD1; out[1] = (c < 240) ? (c - 48) : (c - 112); write(fo, out, 2); }
+                if (c < 0x80 || enc_mode == 0) { 
+                    write(fo, &c, 1);
+                    if (enc_mode == 0 && (c & 0xE0) == 0xC0 && i + 1 < n) { unsigned char c2 = io_buf[++i]; write(fo, &c2, 1); } }
+                else { 
+                    unsigned char out[2];
+                    if (c >= 192) { 
+                        out[0] = (c < 240) ? 0xD0 : 0xD1; 
+                        out[1] = (c < 240) ? (c - 48) : (c - 112); 
+                        write(fo, out, 2); }
                     else write(fo, &c, 1); } }
             write(fo, "</span>", 7);
-            if (enc_mode != 0 || (c & 0xC0) != 0x80) cp++; } }
+            if (enc_mode != 0 || (c & 0xC0) != 0x80) line_pos++; } }
     write(fo, "</div></body></html>", 20);
     fsync(fo); close(fi); close(fo); return 0; }
 

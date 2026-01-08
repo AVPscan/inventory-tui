@@ -1,16 +1,21 @@
-# Inventory TUI System
+# Products Secure Reporter (2026)
 
-Простая и быстрая система учета продуктов с интерфейсом в терминале. 
-Создана на языке Си с поддержкой UTF-8, шифрованием данных и отправкой отчетов по почте.
+Lightweight C tool for managing a product database and sending secure encrypted reports via SMTP.
 
-## Особенности
-* Быстрый поиск товаров по первым буквам.
-* Автоматическое шифрование файла с паролями.
-* Отправка отчетов в формате HTML через `curl`.
-* Оптимизированный размер исполняемого файла.
+## Project Structure
+- `products.c`: Main project logic and entry point.
+- `LibOpt.c / .h`: Core library for encryption, HTML generation, and secure mailing.
+- `products.txt`: Database containing product list.
+- `send.txt`: Encrypted credentials file (Email & SMTP password).
 
-## Сборка
-Для сборки программы в Linux (NixOS) используйте команду:
+## How it works
+1. Place your credentials in `send.txt` as: `user@domain.com password ` (space at the end).
+2. Run the application. The system will:
+   - Encrypt `send.txt` into a HEX-string (hiding your password).
+   - Generate `report.html` from `report.txt`.
+   - Securely send the report via `curl` using encrypted credentials.
+
+## Compilation
 ```bash
-gcc -Os -s -ffunction-sections -fdata-sections -Wl,--gc-sections new.c LibOpt.c -o inventory_prog
+gcc products.c LibOpt.c -o products
 

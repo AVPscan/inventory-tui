@@ -17,15 +17,13 @@
 #include <termios.h>
 #include <time.h>
 #include <getopt.h>
-
 #include "LibOpt.h"
 
 #define BUF_A (1024 * 1024)
-#define DB_NAME "продукты.txt"
-#define fileres "res.txt"
+#define DB_NAME "products.txt"
+#define fileres "report.txt"
 #define filesendID "send.txt"
-#define filesendhtml "temp.html"
-
+#define filesendhtml "report.html"
 typedef struct { 
   char *name;
   int price, col, len;
@@ -107,9 +105,6 @@ int Fpi(const char *s, int *i) {                                    // &i пер
         else if (cmp < 0) low = mid + 1;
             else high = mid - 1; }
     return (last - first + 1); }
-int NextIdUp(int i, int b, int current) {
-    if (b <= 0) return -1;
-    int next = (current - i - 1 + b) % b; return i + next; }
 int NextIdDown(int i, int b, int current) {
     if (b <= 0) return -1;
     int next = (current - i + 1) % b; if (next < 0) next += b;
@@ -294,6 +289,7 @@ int EditField(char *final, int *nprice, int *ncol, int npos) {
                 else { Pleft=0; Pnum=0; if (StrLen(input)+1 <= max_s_chars) { LH[kpcount++] = StrLenB(input); StrCat(input, key);b=Fpi(input,&i); current=i; } } } }
         current=NextIdDown(i,b,current); }
     return current; }
+    
 void help(const char *full_path) {
     const char *name = full_path;
     int i = 0;
@@ -314,7 +310,7 @@ void help(const char *full_path) {
     snprintf((char*)ext_buf, BUF_A,
              "%sTo receive results by email:\n"
              "To get results by mail, you need to create a file %s%s%s and\n"
-             "write %semail@domain.ext password%s. Note that the password is\n"
+             "write %s[email@domain.ext password ]%s. Note that the password is\n"
              "an %s'password for accessing mail from external applications'%s. Upon first \n"
              "run, the file will be encrypted and you will start receiving results.%s",
              ctxt, cnam, filesendID, ctxt, cnam, ctxt, cnam, ctxt, crst);
@@ -322,8 +318,7 @@ void help(const char *full_path) {
     
 int main(int argc, char *argv[]) {
     int opt;
-    static struct option long_options[] = {
-        {"help", no_argument, 0, 'h'}, {0, 0, 0, 0} };
+    static struct option long_options[] = { {"help", no_argument, 0, 'h'}, {0, 0, 0, 0} };
    while ((opt = getopt_long_only(argc, argv, "h?", long_options, NULL)) != -1) {
         switch (opt) {
             case 'h':

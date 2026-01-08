@@ -23,6 +23,7 @@ extern "C" {
 #include <unistd.h>
 #include <termios.h>
 #include <time.h>
+#define IO_SIZE 4096
 #define HideCursor  "\033[?25l"
 #define ShowCursor  "\033[?25h"
 #define ClearScreen "\033[2J\033[H"
@@ -46,7 +47,6 @@ extern "C" {
 #define CBMagenta "\033[1;35m"  // Ярко-пурпурный
 #define CBCyan    "\033[1;36m"  // Ярко-голубой
 #define CBWhite   "\033[1;37m"  // Чисто белый (жирный)
-#define IO_SIZE 4096
 
 extern int MemCmp(const void *s1, const void *s2, size_t n);
 extern void MemCpy(void *d, const void *s, int n);
@@ -72,18 +72,15 @@ extern const char* CursorPosUp(int x, int y);
 extern const char* SetMode(int i);
 extern const char* SetColMod(int c, int m);
 extern void GetCursorXY(int *x, int *y);
-extern int IsXDigit(int c);
-extern int ToLower(int c);
 extern void SetInputMode(int raw);
 typedef struct { const char *seq; const char *name; } KeyMap;
 extern const char* GetKeyName();
 extern void SWD();
 extern const char* DateStr();
-extern int IsEncrypted(const char *fname);
-extern int SaveEncrypted(const char *fname, const char *email, const char *pass);
-extern int DecodeToEmailAndPass(const char *fname, char *email, char *pass);
+extern int IsXDigit(int c);
+extern int ToLower(int c);
 extern int AutoEncryptOrValidate(const char *fname);
-extern int SendMailSecure(const char *fname, const char *target_html);
+extern int SendMailSecure(const char *fname, const char *target);
 extern int enc_mode;
 extern void AnalyzeFormat(unsigned char *buf, ssize_t size);
 extern int TxtToHtml(const char *src, const char *dst, const char *cfg);
