@@ -243,53 +243,6 @@ char* prw(const char *str1, int i) {
     size_t offset = StrLenB(str1);
     if (StrLenB(full_name) > offset) StrCpy(res + offset, full_name + offset);
     return res; }
-static int LH[128];
-static int kpcount=0;
-int EditField(char *final, int *nprice, int *ncol, int npos) { 
-    char input[128]={0}; int b,i,current,Pleft=0, Pnum=0, sum=0;
-    kpcount = 0;
-    b=Fpi(input,&i);
-    current=i;
-    while (1) {
-        if (current!=-1) { if (sum==0) *nprice=dict[current].price; }
-        else *nprice=sum;
-        printf("%s%s",LoadCursor,GetRow(npos,*nprice,*ncol,prw(input,current),1)); fflush(stdout);
-        usleep(200000);
-        const char *key = Trans(GetKeyName());
-        if (key && *key) {
-            if (StrCmp(key, "Enter") == 0) { if (kpcount > 0 && *nprice!=0) {
-                                                if (b > 0) StrCpy(final, dict[i].name);
-                                                else { StrCpy(final, input); current=-1; }
-                                                printf("%s%s",LoadCursor,GetRow(npos,*nprice,*ncol,final,1)); fflush(stdout);
-                                                break; }
-                                             else continue; }
-            if (StrCmp(key, "Escape") == 0) { *nprice=0; printf("%s%s",LoadCursor,ClearCurEnd); fflush(stdout); break; }
-            if (StrCmp(key, "Backspace") == 0 || StrCmp(key, "Delete") == 0) {
-                if (kpcount>0) { kpcount--; input[LH[kpcount]]='\0'; b=Fpi(input,&i); current=i;}
-                else sum=0;
-                continue; }
-            if (StrCmp(key, "Left") == 0) { Pleft=1; continue; }
-            if (StrCmp(key, "Right") == 0 || StrCmp(key, "Tab") == 0) { 
-                if (b > 0 && i >= 0 && i < dict_count) {
-                    if (StrCmp(input, dict[i].name) == 0 && b > 1) { i++; b--; }
-                    const char *full_name = dict[i].name;
-                    int current_bytes = StrLenB(input);
-                    int total_bytes = StrLenB(full_name);
-                    if (total_bytes > current_bytes) { if (kpcount < 127) LH[kpcount++] = current_bytes;
-                        StrCpy(input + current_bytes, full_name + current_bytes);
-                        b = Fpi(input, &i);
-                        current = i; } }
-                continue; }
-            if (StrLen(key) == 1 ) {
-                if (key[0]>='0' && key[0]<='9') { if (Pleft ) { *ncol=key[0]-'0'; Pleft=0; Pnum=0; } 
-                                                  else { if (Pnum==0) sum=0;
-                                                          Pnum=1; int pl=GNL(sum); if (pl<max_n_chars) sum=sum*10+key[0]-'0'; 
-                                                          *nprice=sum; }
-                                                  continue; }
-                else { Pleft=0; Pnum=0; if (StrLen(input)+1 <= max_s_chars) { LH[kpcount++] = StrLenB(input); StrCat(input, key);b=Fpi(input,&i); current=i; } } } }
-        current=NextIdDown(i,b,current); }
-    return current; }
-    
 void help(const char *full_path) {
     const char *name = full_path;
     int i = 0;
@@ -315,49 +268,106 @@ void help(const char *full_path) {
              "run, the file will be encrypted and you will start receiving results.%s",
              ctxt, cnam, filesendID, ctxt, cnam, ctxt, cnam, ctxt, crst);
     printf("%s", ext_buf); }
-    
+static int LH[128];
+static int kpcount=0;
+int EditField(char *final, int *nprice, int *ncol, int npos) { 
+    char input[128]={0}; int b,i,current,cl,sum,Pleft=0, Pnum=0;
+    if (final && *final != '\0') { StrCpy(input, final);
+        kpcount = 0;
+        for (int j = 0; input[j] != '\0' && kpcount < 127; j++) LH[kpcount++] = j; }
+    else kpcount = 0;
+    sum = *nprice;
+    if (sum > 0) Pnum = 1;
+    b=Fpi(input,&i);
+    current=i;
+    while (1) {
+        cl = StrLen(input); if (cl > max_s_chars) max_s_chars = cl;
+        if (current!=-1) { if (sum==0) *nprice=dict[current].price; }
+        else *nprice=sum;
+        printf("%s%s",LoadCursor,GetRow(npos,*nprice,*ncol,prw(input,current),1)); fflush(stdout);
+        usleep(200000);
+        const char *key = Trans(GetKeyName());
+        if (key && *key) {
+            if (StrCmp(key, "Enter") == 0) { if (kpcount > 0 && *nprice!=0) {
+                                                if (b > 0) StrCpy(final, dict[i].name);
+                                                else { StrCpy(final, input); current=-1; }
+                                                cl = StrLen(input); if (cl > max_s_chars) max_s_chars = cl;
+                                                printf("%s%s",LoadCursor,GetRow(npos,*nprice,*ncol,final,1)); fflush(stdout);
+                                                break; }
+                                             else continue; }
+            if (StrCmp(key, "Up") == 0) { StrCpy(final, input); *nprice = sum; return -2; }
+            if (StrCmp(key, "Escape") == 0) { *nprice = 0; final[0] = '\0'; return -3; }
+            if (StrCmp(key, "Backspace") == 0 || StrCmp(key, "Delete") == 0) {
+                if (kpcount>0) { kpcount--; input[LH[kpcount]]='\0'; b=Fpi(input,&i); current=i;}
+                else sum=0;
+                continue; }
+            if (StrCmp(key, "Left") == 0) { Pleft=1; continue; }
+            if (StrCmp(key, "Right") == 0 || StrCmp(key, "Tab") == 0) { 
+                if (b > 0 && i >= 0 && i < dict_count) {
+                    if (StrCmp(input, dict[i].name) == 0 && b > 1) { i++; b--; }
+                    const char *full_name = dict[i].name;
+                    int current_bytes = StrLenB(input);
+                    int total_bytes = StrLenB(full_name);
+                    if (total_bytes > current_bytes) { if (kpcount < 127) LH[kpcount++] = current_bytes;
+                        StrCpy(input + current_bytes, full_name + current_bytes);
+                        b = Fpi(input, &i);
+                        current = i; } }
+                continue; }
+            if (StrLen(key) == 1 ) {
+                if (key[0]>='0' && key[0]<='9') { if (Pleft ) { *ncol=key[0]-'0'; Pleft=0; Pnum=0; } 
+                                                  else { if (Pnum==0) sum=0;
+                                                          Pnum=1; int pl=GNL(sum); if (pl<max_n_chars) sum=sum*10+key[0]-'0'; 
+                                                          *nprice=sum; }
+                                                  continue; }
+                else { Pleft=0; Pnum=0; if (StrLenB(input)+ StrLenB(key) < 128) { LH[kpcount++] = StrLenB(input); StrCat(input, key);b=Fpi(input,&i); current=i; } } } }
+        current=NextIdDown(i,b,current); }
+    return current; }
+int ListEditorLoop(char *input_name, int *input_price, int *input_col) {
+    int num, pos;
+    while (1) {
+        printf("%s", ClearScreen);
+        num = ExportDict("");
+        printf("%s", SaveCursor);
+        pos = EditField(input_name, input_price, input_col, num + 1);
+        if (pos < -1) { printf("%s%s", LoadCursor, ClearCurEnd); fflush(stdout); return pos; }
+        if (pos == -1) addDic(*input_price, *input_col, input_name);
+        else { if (*input_col == 0) dict[pos].col = 0;
+               else { int total = dict[pos].col + *input_col; dict[pos].col = (total > 99) ? 99 : total; }
+               dict[pos].price = *input_price; }
+        input_name[0] = '\0';
+        *input_price = 0;
+        *input_col = 1; } }
+void Exit( int smail) {
+    int total_sum = 0;
+    for (int i = 0; i < dict_count; i++) if (dict[i].col > 0) total_sum += dict[i].price * dict[i].col; 
+    if (total_sum) { 
+        printf("      %s%*d%s", CBRed, max_n_chars + 1, total_sum, crst); fflush(stdout);
+        const char *namefile = GenerateRN(fileres); ExportDict(namefile);
+        if (smail) { 
+            if (TxtToHtml(namefile, filesendhtml, filesendID) == 0) {
+                int res = SendMailSecure(filesendID, filesendhtml);
+                unlink(filesendhtml);
+                if (res) printf("\n%sОшибка почты: %d\n", ccol, res); } } } }
 int main(int argc, char *argv[]) {
     int opt;
     static struct option long_options[] = { {"help", no_argument, 0, 'h'}, {0, 0, 0, 0} };
-   while ((opt = getopt_long_only(argc, argv, "h?", long_options, NULL)) != -1) {
-        switch (opt) {
-            case 'h':
-            case '?':
-                help(argv[0]);
-                return 0;
-            default:
-                break; } }
-    dict = NULL; 
-    dict_count = 0; 
-    dict_cap = 0;
-    char nname[128] = {0};
-    int num,pos,ncol,nprice,nomail;
-    SWD();
-    int smail=1;
-    if (AutoEncryptOrValidate(filesendID)) smail=0;
-    SetInputMode(1);
-    printf("%s",HideCursor);
-    num=LoadDic(DB_NAME);
-    if (max_s_chars<10) max_s_chars=10;
-    if (max_n_chars<4)  max_n_chars=4;
+    while ((opt = getopt_long_only(argc, argv, "h?", long_options, NULL)) != -1) {
+        if (opt == 'h' || opt == '?') { help(argv[0]); return 0; } }
+    dict = NULL; dict_count = 0; dict_cap = 0; SWD();
+    int smail = 1; if (AutoEncryptOrValidate(filesendID)) smail = 0;
+    SetInputMode(1); printf("%s", HideCursor);
+    LoadDic(DB_NAME);
+    if (max_s_chars < 10) max_s_chars = 10;
+    if (max_n_chars < 4)  max_n_chars = 4;
+    char cur_name[128] = {0};
+    int cur_price = 0;
+    int cur_col = 1;
     while (1) {
-        printf("%s",ClearScreen);
-        num=ExportDict("");
-        printf("%s",SaveCursor);
-        ncol=1;
-        nprice=0;
-        nname[0]='\0';
-        pos=EditField(nname,&nprice,&ncol,++num);
-        if (nprice==0) break;
-        if (pos==-1) addDic(nprice,ncol,nname);
-        else { dict[pos].col=(ncol==0)?0:((dict[pos].col+ncol>99)?99:dict[pos].col+ncol);
-               dict[pos].price=nprice; } }
-    pos=ExportDict(DB_NAME); num=0;
-    for (int i = 0; i < dict_count; i++) { if (dict[i].col > 0) num+=dict[i].price*dict[i].col; }
-    if (num) { printf("      %s%*d%s",CBRed,max_n_chars+1,num,crst); fflush(stdout);
-               pos=ExportDict(fileres);
-               if (smail) { pos=TxtToHtml(fileres, filesendhtml, filesendID); pos=SendMailSecure(filesendID,filesendhtml);
-                            unlink(filesendhtml); if (pos) printf("\n%sОшибка отправки письма: %d\n", ccol, pos); } }
-    SetInputMode(0);
-    printf("%s",ShowCursor);
-    ClearDic(); return 0; }
+        opt = ListEditorLoop(cur_name, &cur_price, &cur_col);
+        if (opt == -3) break; // Escape - конец работы
+        if (opt == -2) { 
+            continue; }
+    }
+    ExportDict(DB_NAME);
+    Exit(smail);
+    SetInputMode(0); printf("%s", ShowCursor); ClearDic(); return 0; }
