@@ -49,8 +49,8 @@ void ClearDic() {
     if (!dict) return;
     for (int i = 0; i < dict_count; i++) if (dict[i].name) { free(dict[i].name); dict[i].name = NULL; }
     free(dict); dict = NULL; dict_count = 0; dict_cap = 0; max_s_chars = 0; max_n_chars = 0; }
-void addDic(int price, int col, const char *name) {
-    if (!name || !*name) return;
+int addDic(int price, int col, const char *name) {
+    if (!name || !*name) return -1;
     int low = 0, high = dict_count - 1;
     int pos = 0;
     while (low <= high) {
@@ -62,14 +62,14 @@ void addDic(int price, int col, const char *name) {
             dict[mid].col=(total>99)?99:total;
             int p_len=GNL(dict[mid].price);
             if (p_len>max_n_chars) max_n_chars=p_len;
-            return; }
+            return mid; }
         if (cmp < 0) low = mid + 1;
         else high = mid - 1; }
     pos = low;
     if (dict_count >= dict_cap) {
         int new_cap = (dict_cap < 16) ? 16 : dict_cap * 2;
         Product *new_d = (Product *)realloc(dict, new_cap * sizeof(Product));
-        if (!new_d) return;
+        if (!new_d) return -1;
         dict = new_d;
         dict_cap = new_cap; }
     if (pos < dict_count) MemMove(&dict[pos + 1], &dict[pos], (dict_count - pos) * sizeof(Product));
@@ -80,7 +80,7 @@ void addDic(int price, int col, const char *name) {
     if (dict[pos].len > max_s_chars) max_s_chars = dict[pos].len;
     int p_len = GNL(dict[pos].price);
     if (p_len > max_n_chars) max_n_chars = p_len;
-    dict_count++; }
+    dict_count++; return pos; }
 int Fpi(const char *s, int *i) {                                    // &i первое вхождение в словарь
     if (!dict || dict_count <= 0) { if (i) *i = -1; return 0; }     // b на выходе число совпадений i+0,..,i+b-1 
     if (!s || *s == '\0') { if (i) *i = 0; return dict_count; }
@@ -153,7 +153,7 @@ char* UCase(const char *src, int up) {
             else *d++ = c; } }
     *d = '\0'; return (char*)start; }
 int LoadDic(const char *path) {
-    int fd = open(path, O_RDONLY); if (fd < 0) return 1;
+    int fd = open(path, O_RDONLY); if (fd < 0) return 0;
     char name_tmp[1024]; size_t n_ptr = 0; long long price = 0; int has_p = 0, has_n = 0, last_t = 0; ssize_t bytes;
     while ((bytes = read(fd, ext_buf, BUF_A)) > 0) {
         ssize_t valid_bytes = bytes;
@@ -171,7 +171,7 @@ int LoadDic(const char *path) {
                          (c > 127 || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '.' || c == '_') ? 2 : 0;
             if (has_p && has_n && curr_t == 1 && last_t == 2) {
                 name_tmp[n_ptr] = '\0';
-                addDic((int)price, 0, UCase(name_tmp, 0));
+                if (addDic((int)price, 0, UCase(name_tmp, 0)) == -1) { close(fd); return 0; }
                 price = 0; n_ptr = 0; has_p = 0; has_n = 0; }
             if (curr_t == 1) { price = price * 10 + (c - '0'); has_p = 1; }
             else if (curr_t == 2) { 
@@ -180,10 +180,12 @@ int LoadDic(const char *path) {
                     has_n = 1; } }
             else if (has_p && has_n) { 
                 name_tmp[n_ptr] = '\0';
-                addDic((int)price, 0, UCase(name_tmp, 0));
+                if (addDic((int)price, 0, UCase(name_tmp, 0)) == -1) { close(fd); return 0; }
                 price = 0; n_ptr = 0; has_p = 0; has_n = 0; }
             last_t = curr_t; } }
-    if (has_p && has_n) { name_tmp[n_ptr] = '\0'; addDic((int)price, 0, UCase(name_tmp, 0)); }
+    if (has_p && has_n) { 
+        name_tmp[n_ptr] = '\0'; 
+        if (addDic((int)price, 0, UCase(name_tmp, 0)) == -1) { close(fd); return 0; } }
     close(fd); enc_mode = 0; return dict_count; }
 char* GetRow(int num, int price, int col, const char *name, int mode) {
     static char buffers[8][256];
@@ -328,15 +330,21 @@ int ListEditorLoop(char *input_name, int *input_price, int *input_col) {
         printf("%s", ClearScreen);
         num = ExportDict("");
         printf("%s", SaveCursor);
-        pos = EditField(input_name, input_price, input_col, num + 1);
+        pos = EditField(input_name, input_price, input_col, num + 1);      
         if (pos < -1) { printf("%s%s", LoadCursor, ClearCurEnd); fflush(stdout); return pos; }
-        if (pos == -1) addDic(*input_price, *input_col, input_name);
-        else { if (*input_col == 0) dict[pos].col = 0;
-               else { int total = dict[pos].col + *input_col; dict[pos].col = (total > 99) ? 99 : total; }
-               dict[pos].price = *input_price; }
-        input_name[0] = '\0';
-        *input_price = 0;
-        *input_col = 1; } }
+        if (pos == -1) { int index = addDic(*input_price, *input_col, input_name);
+            if (index == -1) {
+                printf("\nОшибка выделения памяти при добавлении товара. Проверьте ресурсы или попробуйте снова.\n");
+                fflush(stdout);
+                usleep(2000000);
+                continue; } }
+        else {
+            if (*input_col == 0) dict[pos].col = 0;
+            else { 
+                int total = dict[pos].col + *input_col; 
+                dict[pos].col = (total > 99) ? 99 : total; }
+            dict[pos].price = *input_price; }
+        input_name[0] = '\0'; *input_price = 0; *input_col = 1; } }
 void Exit( int smail) {
     int total_sum = 0;
     for (int i = 0; i < dict_count; i++) if (dict[i].col > 0) total_sum += dict[i].price * dict[i].col; 
@@ -356,7 +364,7 @@ int main(int argc, char *argv[]) {
     dict = NULL; dict_count = 0; dict_cap = 0; SWD();
     int smail = 1; if (AutoEncryptOrValidate(filesendID)) smail = 0;
     SetInputMode(1); printf("%s", HideCursor);
-    LoadDic(DB_NAME);
+    opt=LoadDic(DB_NAME);
     if (max_s_chars < 10) max_s_chars = 10;
     if (max_n_chars < 4)  max_n_chars = 4;
     char cur_name[128] = {0};
@@ -364,7 +372,7 @@ int main(int argc, char *argv[]) {
     int cur_col = 1;
     while (1) {
         opt = ListEditorLoop(cur_name, &cur_price, &cur_col);
-        if (opt == -3) break; // Escape - конец работы
+        if (opt == -3) break;
         if (opt == -2) { 
             continue; }
     }
