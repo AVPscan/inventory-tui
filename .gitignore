@@ -2,7 +2,6 @@
 *
 
 # Но разрешить эти типы файлов
-!LibOpt.o
 !LibOpt.c
 !LibOpt.h
 !products.c
