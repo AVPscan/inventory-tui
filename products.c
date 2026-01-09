@@ -17,6 +17,7 @@
 #include <termios.h>
 #include <time.h>
 #include <getopt.h>
+
 #include "LibOpt.h"
 
 #define BUF_A (1024 * 1024)
@@ -245,31 +246,6 @@ char* prw(const char *str1, int i) {
     size_t offset = StrLenB(str1);
     if (StrLenB(full_name) > offset) StrCpy(res + offset, full_name + offset);
     return res; }
-void help(const char *full_path) {
-    const char *name = full_path;
-    int i = 0;
-    while (full_path[i] != '\0') i++;
-    for (int j = i - 1; j >= 0; j--) {
-        if (full_path[j] == '/' || full_path[j] == '\\') {
-            name = &full_path[j + 1];
-            break; } }
-    snprintf((char*)ext_buf, BUF_A,
-             "%s    Program:%s %s\n"
-             "%sDescription: Designed for creating a shopping list with quick item\n"
-             "             selection and total cost estimates; stores new items in the\n"
-             "             database for future use.\n"
-             "     Author:%s Alexey Poznyakov\n"
-             "%s    Contact:%s avp70ru@mail.ru\n",
-             ctxt, cnam, name, ctxt, cnam, ctxt, cnam);
-    printf("%s", ext_buf);
-    snprintf((char*)ext_buf, BUF_A,
-             "%sTo receive results by email:\n"
-             "To get results by mail, you need to create a file %s%s%s and\n"
-             "write %s[email@domain.ext password ]%s. Note that the password is\n"
-             "an %s'password for accessing mail from external applications'%s. Upon first \n"
-             "run, the file will be encrypted and you will start receiving results.%s",
-             ctxt, cnam, filesendID, ctxt, cnam, ctxt, cnam, ctxt, crst);
-    printf("%s", ext_buf); }
 static int LH[128];
 static int kpcount=0;
 int EditField(char *final, int *nprice, int *ncol, int npos) { 
@@ -345,37 +321,58 @@ int ListEditorLoop(char *input_name, int *input_price, int *input_col) {
                 dict[pos].col = (total > 99) ? 99 : total; }
             dict[pos].price = *input_price; }
         input_name[0] = '\0'; *input_price = 0; *input_col = 1; } }
-void Exit( int smail) {
-    int total_sum = 0;
-    for (int i = 0; i < dict_count; i++) if (dict[i].col > 0) total_sum += dict[i].price * dict[i].col; 
-    if (total_sum) { 
-        printf("      %s%*d%s", CBRed, max_n_chars + 1, total_sum, crst); fflush(stdout);
-        const char *namefile = GenerateRN(fileres); ExportDict(namefile);
-        if (smail) { 
-            if (TxtToHtml(namefile, filesendhtml, filesendID) == 0) {
-                int res = SendMailSecure(filesendID, filesendhtml);
-                unlink(filesendhtml);
-                if (res) printf("\n%sОшибка почты: %d\n", ccol, res); } } } }
-int main(int argc, char *argv[]) {
-    int opt;
+int help(int argc, char *argv[], int *opt) {
+    int show_help = 0;
     static struct option long_options[] = { {"help", no_argument, 0, 'h'}, {0, 0, 0, 0} };
-    while ((opt = getopt_long_only(argc, argv, "h?", long_options, NULL)) != -1) {
-        if (opt == 'h' || opt == '?') { help(argv[0]); return 0; } }
+    optind = 1;
+    while ((*opt = getopt_long_only(argc, argv, "h?", long_options, NULL)) != -1) {
+        if (*opt == 'h' || *opt == '?') { show_help = 1; break; } }
+    if (!show_help) return 0;
+    const char *name = argv[0];
+    for (int i = 0; argv[0][i] != '\0'; i++) {
+        if (argv[0][i] == '/' || argv[0][i] == '\\') name = &argv[0][i + 1]; }
+    snprintf((char*)ext_buf, BUF_A,
+             "%s    Program:%s %s\n"
+             "%sDescription: Designed for creating a shopping list with quick item\n"
+             "             selection and total cost estimates; stores new items in the\n"
+             "             database for future use.\n"
+             "     Author:%s Alexey Poznyakov\n"
+             "%s    Contact:%s avp70ru@mail.ru\n",
+             ctxt, cnam, name, ctxt, cnam, ctxt, cnam);
+    printf("%s", ext_buf);
+    snprintf((char*)ext_buf, BUF_A,
+             "%sTo receive results by email:\n"
+             "To get results by mail, you need to create a file %s%s%s and\n"
+             "write %s[email@domain.ext password ]%s. Note that the password is\n"
+             "an %s'password for accessing mail from external applications'%s. Upon first \n"
+             "run, the file will be encrypted and you will start receiving results.%s",
+             ctxt, cnam, filesendID, ctxt, cnam, ctxt, cnam, ctxt, crst);
+    printf("%s", ext_buf); return 1; }
+void Products(int *opt) {
     dict = NULL; dict_count = 0; dict_cap = 0; SWD();
     int smail = 1; if (AutoEncryptOrValidate(filesendID)) smail = 0;
     SetInputMode(1); printf("%s", HideCursor);
-    opt=LoadDic(DB_NAME);
+    *opt = LoadDic(DB_NAME);
     if (max_s_chars < 10) max_s_chars = 10;
-    if (max_n_chars < 4)  max_n_chars = 4;
-    char cur_name[128] = {0};
-    int cur_price = 0;
-    int cur_col = 1;
+    if (max_n_chars < 4) max_n_chars = 4;
+    char cur_name[128] = {0}; int cur_price = 0, cur_col = 1;
     while (1) {
-        opt = ListEditorLoop(cur_name, &cur_price, &cur_col);
-        if (opt == -3) break;
-        if (opt == -2) { 
-            continue; }
-    }
+        *opt = ListEditorLoop(cur_name, &cur_price, &cur_col);
+        if (*opt == -3) break;
+        if (*opt == -2) continue; }
     ExportDict(DB_NAME);
-    Exit(smail);
-    SetInputMode(0); printf("%s", ShowCursor); ClearDic(); return 0; }
+    *opt = 0; for (int i = 0; i < dict_count; i++) if (dict[i].col > 0) *opt += dict[i].price * dict[i].col;
+    if (*opt) { printf("      %s%*d%s", CBRed, max_n_chars + 1, *opt, crst); fflush(stdout);
+        const char *namefile = GenerateRN(fileres); *opt = ExportDict(namefile);
+        if (smail) {
+            if (TxtToHtml(namefile, filesendhtml, filesendID) == 0) {
+                *opt = SendMailSecure(filesendID, filesendhtml);
+                unlink(filesendhtml);
+                if (*opt) printf("\n%sОшибка почты: %d\n", ccol, *opt); } } }
+    SetInputMode(0); printf("%s", ShowCursor); ClearDic(); }
+int main(int argc, char *argv[]) {
+    int opt = 0;
+    if (help(argc, argv, &opt)) return 0;
+    Products(&opt);
+    return 0; }
+
