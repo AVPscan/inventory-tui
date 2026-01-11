@@ -9,7 +9,7 @@
  * Этот проект распространяется под условиями лицензии Apache-2.0.
  * Полный текст лицензии можно найти в файле LICENSE в корневом каталоге.
  */
- 
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -263,7 +263,8 @@ int EditField(char *final, int *nprice, int *ncol, int npos) {
         if (current!=-1) { if (sum==0) *nprice=dict[current].price; }
         else *nprice=sum;
         printf("%s%s",LoadCursor,GetRow(npos,*nprice,*ncol,prw(input,current),1)); fflush(stdout);
-        usleep(200000);
+        struct timespec ts = {.tv_sec = 0, .tv_nsec = 200000000};
+        nanosleep(&ts, NULL);
         const char *key = Trans(GetKeyName());
         if (key && *key) {
             if (StrCmp(key, "Enter") == 0) { if (kpcount > 0 && *nprice!=0) {

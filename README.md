@@ -1,21 +1,22 @@
 # Products Secure Reporter (2026)
 
-Lightweight C tool for managing a product database and sending secure encrypted reports via SMTP.
+Легковесный инструмент на C для управления базой данных продуктов и отправки защищенных зашифрованных отчетов через SMTP.
 
-## Project Structure
-- `products.c`: Main project logic and entry point.
-- `LibOpt.c / .h`: Core library for encryption, HTML generation, and secure mailing.
-- `products.txt`: Database containing product list.
-- `send.txt`: Encrypted credentials file (Email & SMTP password).
+## 📁 Структура проекта
+- `main.c` - Основная логика проекта и точка входа
+- `libavp.c / libavp.h` - Основная библиотека (шифрование, генерация HTML, безопасная почта)
+- `products.txt` - База данных с списком продуктов
+- `send.txt` - Файл с зашифрованными учетными данными (email и пароль SMTP)
 
-## How it works
-1. Place your credentials in `send.txt` as: `user@domain.com password ` (space at the end).
-2. Run the application. The system will:
-   - Encrypt `send.txt` into a HEX-string (hiding your password).
-   - Generate `report.html` from `report.txt`.
-   - Securely send the report via `curl` using encrypted credentials.
+## 🚀 Как это работает
+1. Поместите ваши учетные данные в `send.txt` в формате: `user@domain.com password ` (пробел в конце)
+2. Запустите приложение. Система:
+   - Зашифрует `send.txt` в HEX-строку (скроет ваш пароль)
+   - Сгенерирует `report.html` из `report.txt`
+   - Безопасно отправит отчет через `curl` используя зашифрованные учетные данные
 
-## Compilation
+## 🔧 Компиляция
+
+### Быстрая сборка:
 ```bash
-gcc products.c LibOpt.c -o products
-
+make
